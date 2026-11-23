@@ -1,29 +1,32 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Same-origin /api (proxied by nginx to the backend)
+    const DEFAULT_API_URL = `${window.location.origin}/api`;
+
     // Elements - API Server Config
     const apiUrlInput = document.getElementById('api-url-input');
     const checkApiBtn = document.getElementById('check-api-btn');
     const apiStatusBadge = document.getElementById('api-status-badge');
 
     // Default to the local backend, or restore previous user input from localStorage
-    let savedApiUrl = localStorage.getItem('financial_rag_api_url');
+    let savedApiUrl = localStorage.getItem('financial_rag_api_url_v2');
     if (!savedApiUrl) {
-        savedApiUrl = 'http://localhost:8000';
-        localStorage.setItem('financial_rag_api_url', savedApiUrl);
+        savedApiUrl = DEFAULT_API_URL;
+        localStorage.setItem('financial_rag_api_url_v2', savedApiUrl);
     }
     if (apiUrlInput) {
         apiUrlInput.value = savedApiUrl;
     }
 
     function getBaseUrl() {
-        if (!apiUrlInput) return 'http://localhost:8000';
-        const url = apiUrlInput.value.trim() || 'http://localhost:8000';
+        if (!apiUrlInput) return DEFAULT_API_URL;
+        const url = apiUrlInput.value.trim() || DEFAULT_API_URL;
         return url.replace(/\/+$/, '');
     }
 
     // Health check logic for API connection
     async function checkApiHealth() {
         const url = getBaseUrl();
-        localStorage.setItem('financial_rag_api_url', url);
+        localStorage.setItem('financial_rag_api_url_v2', url);
         apiStatusBadge.className = 'badge badge-connecting';
         apiStatusBadge.textContent = 'Checking...';
 
