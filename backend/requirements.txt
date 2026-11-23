@@ -1,0 +1,10 @@
+fastapi>=0.110
+uvicorn>=0.28
+python-multipart>=0.0.9
+pydantic>=2.6
+langchain-openai
+langchain-core
+qdrant-client
+google-genai
+pdf2image
+pillow
