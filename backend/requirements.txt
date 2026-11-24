@@ -8,3 +8,4 @@ qdrant-client
 google-genai
 pdf2image
 pillow
+boto3

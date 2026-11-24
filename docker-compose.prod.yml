@@ -1,0 +1,38 @@
+# Used on EC2 by the CI/CD pipeline. AWS access comes from the EC2 IAM role (no keys needed).
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  backend:
+    image: ${BACKEND_IMAGE}
+    environment: &app-env
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      QDRANT_URL: http://qdrant:6333
+      AWS_REGION: ${AWS_REGION}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+      SQS_QUEUE_URL: ${SQS_QUEUE_URL}
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+
+  worker:
+    image: ${BACKEND_IMAGE}
+    command: ["python", "-u", "-m", "app.worker"]
+    environment: *app-env
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+
+  frontend:
+    image: ${FRONTEND_IMAGE}
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  qdrant_data:

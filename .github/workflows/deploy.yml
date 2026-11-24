@@ -1,0 +1,71 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
+jobs:
+  build:
+    name: Build & push images to ECR
+    runs-on: ubuntu-latest
+    outputs:
+      registry: ${{ steps.ecr.outputs.registry }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ github.sha }}
+        run: |
+          for svc in backend frontend; do
+            docker build -t $REGISTRY/financial-rag-$svc:$TAG ./$svc
+            docker push $REGISTRY/financial-rag-$svc:$TAG
+          done
+
+  deploy:
+    name: Deploy on EC2 (self-hosted runner)
+    needs: build
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to ECR
+        run: |
+          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
+            | docker login --username AWS --password-stdin ${{ needs.build.outputs.registry }}
+
+      - name: Deploy
+        env:
+          BACKEND_IMAGE: ${{ needs.build.outputs.registry }}/financial-rag-backend:${{ github.sha }}
+          FRONTEND_IMAGE: ${{ needs.build.outputs.registry }}/financial-rag-frontend:${{ github.sha }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          SQS_QUEUE_URL: ${{ secrets.SQS_QUEUE_URL }}
+        run: |
+          docker compose -f docker-compose.prod.yml -p financial_rag pull
+          docker compose -f docker-compose.prod.yml -p financial_rag up -d --remove-orphans
+          docker image prune -f
+
+      - name: Health check
+        run: |
+          for i in $(seq 1 20); do
+            curl -fs http://localhost/api/health && exit 0
+            sleep 3
+          done
+          docker compose -p financial_rag logs --tail 50 backend
+          exit 1

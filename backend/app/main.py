@@ -2,6 +2,7 @@ import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import boto3
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -21,7 +22,8 @@ async def lifespan(app: FastAPI):
         clients["embedder"] = GeminiEmbedder()
         clients["store"] = VectorStore()
         clients["llm"] = GeminiRAG()
-        start_background_ingestion(clients["embedder"], clients["store"])
+        if not config.SQS_QUEUE_URL:  # local mode: watch data/ folder; AWS mode: worker container ingests
+            start_background_ingestion(clients["embedder"], clients["store"])
         print("Backend ready.")
     except Exception as e:
         print(f"Startup error: {e}")
@@ -62,6 +64,17 @@ def upload(file: UploadFile = File(...)):
     name = Path(file.filename or "").name
     if not name.lower().endswith(".pdf"):
         raise HTTPException(400, "Only PDF files are supported.")
+    if config.S3_BUCKET_NAME:
+        try:
+            boto3.client("s3", region_name=config.AWS_REGION).upload_fileobj(
+                file.file, config.S3_BUCKET_NAME, name, ExtraArgs={"ContentType": "application/pdf"}
+            )
+        except Exception as e:
+            raise HTTPException(500, f"S3 upload failed: {e}")
+        return UploadResponse(
+            status="success", filename=name,
+            message=f"Uploaded {name} to s3://{config.S3_BUCKET_NAME}. The worker will ingest it shortly.",
+        )
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     with open(config.DATA_DIR / name, "wb") as out:
         shutil.copyfileobj(file.file, out)

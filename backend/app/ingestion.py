@@ -24,14 +24,15 @@ def _signature(pdf: Path) -> list:
     return [stat.st_mtime, stat.st_size]
 
 
-def ingest_pdf(pdf: Path, embedder: GeminiEmbedder, store: VectorStore):
-    print(f"Ingesting {pdf.name}...")
+def ingest_pdf(pdf: Path, embedder: GeminiEmbedder, store: VectorStore, source: str | None = None):
+    source = source or pdf.name
+    print(f"Ingesting {source}...")
     for page, total, image in iter_pages(pdf):
         vector = embedder.embed_image(image)
         store.ensure_collection(len(vector))
-        store.add_page(vector, to_base64(image), pdf.name, page)
-        print(f"  {pdf.name}: page {page}/{total}")
-    print(f"Done: {pdf.name}")
+        store.add_page(vector, to_base64(image), source, page)
+        print(f"  {source}: page {page}/{total}")
+    print(f"Done: {source}")
 
 
 def scan_once(embedder: GeminiEmbedder, store: VectorStore):
