@@ -12,8 +12,6 @@ jobs:
   build:
     name: Build & push images to ECR
     runs-on: ubuntu-latest
-    outputs:
-      registry: ${{ steps.ecr.outputs.registry }}
     steps:
       - uses: actions/checkout@v4
 
@@ -45,13 +43,15 @@ jobs:
 
       - name: Log in to ECR
         run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "REGISTRY=$ACCOUNT_ID.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com" >> "$GITHUB_ENV"
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
-            | docker login --username AWS --password-stdin ${{ needs.build.outputs.registry }}
+            | docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
 
       - name: Deploy
         env:
-          BACKEND_IMAGE: ${{ needs.build.outputs.registry }}/financial-rag-backend:${{ github.sha }}
-          FRONTEND_IMAGE: ${{ needs.build.outputs.registry }}/financial-rag-frontend:${{ github.sha }}
+          BACKEND_IMAGE: ${{ env.REGISTRY }}/financial-rag-backend:${{ github.sha }}
+          FRONTEND_IMAGE: ${{ env.REGISTRY }}/financial-rag-frontend:${{ github.sha }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
